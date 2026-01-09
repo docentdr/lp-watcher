@@ -167,7 +167,8 @@ async function generateHTML() {
     <body>
       <div class="container">
         ${snapshot.recycle_suggested === 'TRUE' 
-          && '<div class="status ready">TIME TO RECYCLE</div>'
+          ? '<div class="status ready">TIME TO RECYCLE</div>'
+          : ''
         }
 
         <table>
@@ -178,6 +179,14 @@ async function generateHTML() {
           <tr>
             <td>Date</td>
             <td>${snapshot.date}</td>
+          </tr>
+          <tr>
+            <td>Total Worth (ETH)</td>
+            <td>${parseFloat(snapshot.worth_eth).toFixed(1)}</td>
+          </tr>
+          <tr>
+            <td>Total Worth (USDC)</td>
+            <td>$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
           </tr>
           <tr>
             <td>Position ETH</td>
@@ -194,14 +203,6 @@ async function generateHTML() {
           <tr>
             <td>Fee USDC</td>
             <td>${parseFloat(snapshot.fee_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (ETH)</td>
-            <td>${parseFloat(snapshot.worth_eth).toFixed(1)}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (USDC)</td>
-            <td>$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
           </tr>
           <tr>
             <td>Recycle Ready</td>
