@@ -20,4 +20,4 @@ RUN mkdir -p data
 EXPOSE 3169
 
 # Start the server
-CMD ["node", "index.js"]
+CMD ["node", "server.js"]
