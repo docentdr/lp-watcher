@@ -16,12 +16,12 @@ const DATA_DIR = path.join(__dirname, "data");
 await fs.mkdir(DATA_DIR, { recursive: true });
 
 /**
- * Run simple.js to take a snapshot
+ * Run index.js to take a snapshot
  */
 function takeSnapshot() {
   console.log(`[${new Date().toISOString()}] Taking snapshot...`);
   return new Promise((resolve) => {
-    const child = spawn("node", ["simple.js"], { cwd: __dirname });
+    const child = spawn("node", ["index.js"], { cwd: __dirname });
     
     child.on("close", (code) => {
       if (code === 0) {
@@ -100,9 +100,6 @@ async function generateHTML() {
           <p class="info">Waiting for first snapshot...</p>
           <p class="info">Page auto-refreshes every 30 seconds</p>
         </div>
-        <script>
-          setTimeout(() => location.reload(), 30000);
-        </script>
       </body>
       </html>
     `;
@@ -127,31 +124,6 @@ async function generateHTML() {
         }
         .container { max-width: 900px; margin: 0 auto; }
         h1 { color: #4ec9b0; margin-top: 0; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
-        .card { 
-          background: #252526; 
-          border: 1px solid #3e3e42; 
-          border-radius: 4px; 
-          padding: 15px; 
-        }
-        .card-title { 
-          color: #4ec9b0; 
-          font-size: 12px; 
-          text-transform: uppercase; 
-          margin: 0 0 10px 0;
-          font-weight: bold;
-        }
-        .card-value { 
-          font-size: 24px; 
-          font-weight: bold; 
-          color: #ce9178;
-          margin: 5px 0;
-        }
-        .card-subtitle { 
-          color: #858585; 
-          font-size: 12px; 
-          margin: 5px 0;
-        }
         .status { 
           padding: 10px; 
           border-radius: 4px; 
@@ -194,34 +166,6 @@ async function generateHTML() {
     </head>
     <body>
       <div class="container">
-        <h1>📊 LP Watcher Dashboard</h1>
-        
-        <div class="grid">
-          <div class="card">
-            <div class="card-title">Position (ETH)</div>
-            <div class="card-value">${parseFloat(snapshot.pos_eth).toFixed(4)}</div>
-            <div class="card-subtitle">+ ${parseFloat(snapshot.pos_usdc).toLocaleString()} USDC</div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Accrued Fees (ETH)</div>
-            <div class="card-value">${parseFloat(snapshot.fee_eth).toFixed(4)}</div>
-            <div class="card-subtitle">+ ${parseFloat(snapshot.fee_usdc).toLocaleString()} USDC</div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Total Worth</div>
-            <div class="card-value">$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</div>
-            <div class="card-subtitle">${parseFloat(snapshot.worth_eth).toFixed(1)} ETH</div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">ETH Price</div>
-            <div class="card-value">$${parseFloat(snapshot.eth_price).toLocaleString('en-US', {maximumFractionDigits: 2})}</div>
-            <div class="card-subtitle">as of ${snapshot.date}</div>
-          </div>
-        </div>
-
         ${snapshot.recycle_suggested === 'TRUE' 
           ? '<div class="status ready">✅ TIME TO RECYCLE FEES! Fees > $250</div>' 
           : '<div class="status waiting">⏳ Keep accumulating... (< $250)</div>'
@@ -272,15 +216,9 @@ async function generateHTML() {
 
         <div class="footer">
           Last updated: ${lastUpdate}<br>
-          Page auto-refreshes every 30 seconds<br>
           Next snapshot: every hour
         </div>
       </div>
-
-      <script>
-        // Auto refresh every 30 seconds
-        setTimeout(() => location.reload(), 30000);
-      </script>
     </body>
     </html>
   `;
