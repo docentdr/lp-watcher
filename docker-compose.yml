@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  lp-watcher:
+    build: .
+    container_name: lp-watcher
+    ports:
+      - "3169:3169"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=3169
+    restart: unless-stopped
+    networks:
+      - lp-network
+
+networks:
+  lp-network:
+    driver: bridge
