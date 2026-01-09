@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --only=production
 
 # Copy source files
-COPY simple.js server.js .
+COPY index.js server.js ./
 COPY src/ ./src/
 COPY .env .env
 
@@ -20,4 +20,4 @@ RUN mkdir -p data
 EXPOSE 3169
 
 # Start the server
-CMD ["node", "server.js"]
+CMD ["node", "index.js"]
