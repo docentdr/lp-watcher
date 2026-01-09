@@ -167,8 +167,7 @@ async function generateHTML() {
     <body>
       <div class="container">
         ${snapshot.recycle_suggested === 'TRUE' 
-          ? '<div class="status ready">✅ TIME TO RECYCLE FEES! Fees > $250</div>' 
-          : '<div class="status waiting">⏳ Keep accumulating... (< $250)</div>'
+          && '<div class="status ready">TIME TO RECYCLE</div>'
         }
 
         <table>
