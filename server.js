@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import cron from "node-cron";
+import { generateHTML } from "./src/utils/html.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +48,53 @@ function takeSnapshot() {
 }
 
 /**
+ * Check if today already has an entry in the CSV
+ */
+async function hasTodayEntry() {
+  try {
+    const content = await fs.readFile(CSV_PATH, "utf8");
+    const lines = content.trim().split("\n");
+    
+    if (lines.length < 2) {
+      return false;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const lastLine = lines[lines.length - 1];
+    const lastDate = lastLine.split(",")[0];
+
+    return lastDate === today;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Update today's entry in CSV (replace the last line if it's for today)
+ */
+async function removeTodaysEntry() {
+  try {
+    const content = await fs.readFile(CSV_PATH, "utf8");
+    const lines = content.trim().split("\n");
+    
+    if (lines.length < 2) {
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const lastLine = lines[lines.length - 1];
+    const lastDate = lastLine.split(",")[0];
+
+    if (lastDate === today) {
+      lines.pop();
+      await fs.writeFile(CSV_PATH, lines.join("\n") + "\n", "utf8");
+    }
+  } catch (err) {
+    console.error("Error updating today's entry:", err);
+  }
+}
+
+/**
  * Read the latest row from CSV
  */
 async function getLatestSnapshot() {
@@ -73,163 +121,25 @@ async function getLatestSnapshot() {
   }
 }
 
-/**
- * Generate HTML response
- */
-async function generateHTML() {
-  const snapshot = await getLatestSnapshot();
 
-  if (!snapshot) {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>LP Watcher</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-          body { font-family: monospace; background: #1e1e1e; color: #e0e0e0; padding: 20px; }
-          .container { max-width: 800px; margin: 0 auto; }
-          h1 { color: #4ec9b0; }
-          .info { color: #d4d4d4; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>📊 LP Watcher</h1>
-          <p class="info">Waiting for first snapshot...</p>
-          <p class="info">Page auto-refreshes every 30 seconds</p>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  const lastUpdate = new Date().toISOString();
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>LP Watcher</title>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        body { 
-          font-family: 'Monaco', 'Courier New', monospace; 
-          background: #1e1e1e; 
-          color: #e0e0e0; 
-          padding: 20px; 
-          margin: 0;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { color: #4ec9b0; margin-top: 0; }
-        .status { 
-          padding: 10px; 
-          border-radius: 4px; 
-          margin: 15px 0;
-          text-align: center;
-          font-weight: bold;
-        }
-        .status.ready { background: #1f4620; color: #4ec9b0; }
-        .status.waiting { background: #3d3d1f; color: #d4d4d4; }
-        .footer { 
-          color: #858585; 
-          font-size: 11px; 
-          margin-top: 30px; 
-          text-align: center;
-        }
-        table { 
-          width: 100%; 
-          border-collapse: collapse; 
-          background: #252526;
-          border: 1px solid #3e3e42;
-          border-radius: 4px;
-          overflow: hidden;
-          margin: 20px 0;
-        }
-        th, td { 
-          padding: 12px; 
-          text-align: left; 
-          border-bottom: 1px solid #3e3e42;
-        }
-        th { 
-          background: #2d2d30; 
-          color: #4ec9b0;
-          font-weight: bold;
-          font-size: 12px;
-          text-transform: uppercase;
-        }
-        td { color: #ce9178; }
-        tr:hover { background: #2d2d30; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        ${snapshot.recycle_suggested === 'TRUE' 
-          ? '<div class="status ready">TIME TO RECYCLE</div>'
-          : ''
-        }
-
-        <table>
-          <tr>
-            <th>Field</th>
-            <th>Value</th>
-          </tr>
-          <tr>
-            <td>Date</td>
-            <td>${snapshot.date}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (ETH)</td>
-            <td>${parseFloat(snapshot.worth_eth).toFixed(1)}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (USDC)</td>
-            <td>$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Position ETH</td>
-            <td>${parseFloat(snapshot.pos_eth).toFixed(4)}</td>
-          </tr>
-          <tr>
-            <td>Position USDC</td>
-            <td>${parseFloat(snapshot.pos_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Fee ETH</td>
-            <td>${parseFloat(snapshot.fee_eth).toFixed(4)}</td>
-          </tr>
-          <tr>
-            <td>Fee USDC</td>
-            <td>${parseFloat(snapshot.fee_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Recycle Ready</td>
-            <td>${snapshot.recycle_suggested}</td>
-          </tr>
-          <tr>
-            <td>ETH Price</td>
-            <td>$${parseFloat(snapshot.eth_price).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-        </table>
-
-        <div class="footer">
-          Last updated: ${lastUpdate}<br>
-          Next snapshot: every hour
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
 
 /**
  * HTTP Server
  */
 const server = http.createServer(async (req, res) => {
   if (req.url === "/" || req.url === "/index.html") {
-    const html = await generateHTML();
+    const hasEntry = await hasTodayEntry();
+    
+    if (hasEntry) {
+      await removeTodaysEntry();
+      await takeSnapshot();
+    } else {
+
+      await takeSnapshot();
+    }
+    
+    const snapshot = await getLatestSnapshot();
+    const html = generateHTML(snapshot);
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end(html);
   } else {
@@ -238,16 +148,19 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Schedule snapshot every hour
-cron.schedule("0 * * * *", async () => {
-  await takeSnapshot();
+// Schedule snapshot once a day at midnight
+cron.schedule("0 0 * * *", async () => {
+  const hasEntry = await hasTodayEntry();
+  
+  if (!hasEntry) {
+    await takeSnapshot();
+  }
 });
 
-// Also take a snapshot on startup
 console.log(`[${new Date().toISOString()}] Starting LP Watcher Server`);
 console.log(`[${new Date().toISOString()}] Port: ${PORT}`);
 console.log(`[${new Date().toISOString()}] CSV Path: ${CSV_PATH}`);
-await takeSnapshot();
+console.log(`[${new Date().toISOString()}] Snapshot will be taken on first page visit or at midnight`);
 
 // Start server
 server.listen(PORT, () => {
