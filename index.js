@@ -16,6 +16,7 @@ function requireEnv(name) {
 
 /**
  * Save snapshot to CSV file for historical tracking
+ * Replaces today's entry if it exists, otherwise appends
  */
 async function saveToCSV(snapshot) {
   const csvPath = path.join(__dirname, "data", "position-history.csv");
@@ -54,7 +55,26 @@ async function saveToCSV(snapshot) {
     await fs.writeFile(csvPath, "date,pos_eth,pos_usdc,fee_eth,fee_usdc,worth_eth,worth_usdc,recycle_suggested,eth_price\n", "utf8");
   }
   
-  // Append the line
+  // Check if today already has an entry and replace it
+  if (fileExists) {
+    const content = await fs.readFile(csvPath, "utf8");
+    const lines = content.trim().split("\n");
+    
+    if (lines.length > 1) {
+      const today = new Date().toISOString().split("T")[0];
+      const lastLine = lines[lines.length - 1];
+      const lastDate = lastLine.split(",")[0];
+      
+      if (lastDate === today) {
+        // Replace today's entry
+        lines[lines.length - 1] = csvLine;
+        await fs.writeFile(csvPath, lines.join("\n") + "\n", "utf8");
+        return;
+      }
+    }
+  }
+  
+  // Append new entry if no entry for today exists
   await fs.appendFile(csvPath, csvLine + "\n", "utf8");
 }
 

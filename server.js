@@ -128,15 +128,8 @@ async function getLatestSnapshot() {
  */
 const server = http.createServer(async (req, res) => {
   if (req.url === "/" || req.url === "/index.html") {
-    const hasEntry = await hasTodayEntry();
-    
-    if (hasEntry) {
-      await removeTodaysEntry();
-      await takeSnapshot();
-    } else {
-
-      await takeSnapshot();
-    }
+    // Take snapshot (will replace today's entry if it exists)
+    await takeSnapshot();
     
     const snapshot = await getLatestSnapshot();
     const html = generateHTML(snapshot);
