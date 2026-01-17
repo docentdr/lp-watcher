@@ -1,3 +1,67 @@
+import { fmt } from './format.js';
+
+/**
+ * Calculate swap needed based on CSV snapshot data
+ * Simplified version that works with the CSV fields
+ */
+function calculateSwapFromCSV(snapshot) {
+  const ethPrice = parseFloat(snapshot.eth_price);
+  const posEth = parseFloat(snapshot.pos_eth);
+  const posUsdc = parseFloat(snapshot.pos_usdc);
+  const feeEth = parseFloat(snapshot.fee_eth);
+  const feeUsdc = parseFloat(snapshot.fee_usdc);
+  
+  const GAS_SAFETY_BUFFER_ETH = 0.01;
+  
+  // Current position ratio (in USD terms)
+  const posUsdEth = posEth * ethPrice;
+  const posUsdUsdc = posUsdc;
+  const totalPosUsd = posUsdEth + posUsdUsdc;
+  const targetRatio = totalPosUsd > 0 ? posUsdEth / totalPosUsd : 0.5;
+  
+  // Fees available (in USD terms, with gas buffer)
+  let feesUsdEth = feeEth > GAS_SAFETY_BUFFER_ETH 
+    ? (feeEth - GAS_SAFETY_BUFFER_ETH) * ethPrice 
+    : 0;
+  let feesUsdUsdc = feeUsdc;
+  
+  const totalFeesUsd = feesUsdEth + feesUsdUsdc;
+  
+  // Target split to match position ratio
+  const targetUsdEth = totalFeesUsd * targetRatio;
+  const targetUsdUsdc = totalFeesUsd * (1 - targetRatio);
+  
+  const needUsdEth = targetUsdEth - feesUsdEth;
+  const needUsdUsdc = targetUsdUsdc - feesUsdUsdc;
+  
+  // Determine swap needed
+  if (Math.abs(needUsdEth) < 1 && Math.abs(needUsdUsdc) < 1) {
+    return null; // Already balanced
+  } else if (needUsdEth > 1) {
+    // Need more ETH - sell USDC for ETH
+    const sellUsdcAmount = needUsdEth;
+    const buyEthAmount = sellUsdcAmount / ethPrice;
+    return {
+      direction: 'USDC→ETH',
+      sellAmount: sellUsdcAmount,
+      buyAmount: buyEthAmount,
+      text: `Convert $${fmt(sellUsdcAmount)} USDC to ${buyEthAmount.toFixed(4)} ETH`
+    };
+  } else if (needUsdUsdc > 1) {
+    // Need more USDC - sell ETH for USDC
+    const sellEthAmount = needUsdUsdc / ethPrice;
+    const buyUsdcAmount = needUsdUsdc;
+    return {
+      direction: 'ETH→USDC',
+      sellAmount: sellEthAmount,
+      buyAmount: buyUsdcAmount,
+      text: `Convert ${sellEthAmount.toFixed(4)} ETH to USDC (est. $${fmt(buyUsdcAmount)})`
+    };
+  }
+  
+  return null;
+}
+
 /**
  * Generate HTML response for the LP Watcher dashboard
  */
@@ -90,7 +154,11 @@ export function generateHTML(snapshot) {
     <body>
       <div class="container">
         ${snapshot.recycle_suggested === 'TRUE' 
-          ? '<div class="status ready">TIME TO RECYCLE</div>'
+          ? `<div class="status ready">TIME TO RECYCLE</div>
+             ${(() => {
+               const swap = calculateSwapFromCSV(snapshot);
+               return swap ? `<div style="text-align: center; color: #4ec9b0; margin: -10px 0 15px 0; font-size: 14px;">${swap.text}</div>` : '';
+             })()}`
           : ''
         }
 
