@@ -65,7 +65,82 @@ function calculateSwapFromCSV(snapshot) {
 /**
  * Generate HTML response for the LP Watcher dashboard
  */
-export function generateHTML(snapshot, history = []) {
+export function generateHTML(
+  snapshot,
+  history = [],
+  validators = { entries: [], message: null },
+  wallets = { wallets: [] }
+) {
+  const validatorEntries = validators?.entries ?? [];
+  const validatorMessage = validators?.message ?? null;
+
+  const validatorCards = validatorEntries.length
+    ? validatorEntries
+        .map((entry) => {
+          const statusText = entry.error ? 'error' : entry.status ?? 'unknown';
+          const statusClass = entry.error ? 'error' : statusText.toLowerCase();
+          const balanceText = entry.balanceEth != null ? `${entry.balanceEth.toFixed(4)} ETH` : '—';
+
+          return `
+            <div class="validator-card">
+              <div class="validator-id">Validator #${entry.index}</div>
+              <div class="validator-meta">
+                <span class="validator-status ${statusClass}">${statusText}</span>
+                <span class="validator-balance">${balanceText}</span>
+              </div>
+              ${entry.error ? `<div class="validator-error">${entry.error}</div>` : ''}
+            </div>
+          `;
+        })
+        .join('')
+    : `<div class="empty">${validatorMessage || 'Validator data unavailable.'}</div>`;
+
+  const validatorPanel = `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Validators</h2>
+        <span class="hint">Live from beaconcha.in</span>
+      </div>
+      <div class="validator-grid">
+        ${validatorCards}
+      </div>
+    </div>
+  `;
+
+  const walletCards = (wallets?.wallets || [])
+    .map((w) => {
+      const ethLine = w.eth?.error ? `ETH: error` : `ETH: ${fmt(w.eth?.amount ?? 0, 4)}`;
+      const uEthLine = w.uEth?.error ? `uETH: error` : `uETH: ${fmt(w.uEth?.amount ?? 0, 4)}`;
+      const uUsdcLine = w.uUsdc?.error ? `uUSDC: error` : `uUSDC: ${fmt(w.uUsdc?.amount ?? 0, 2)}`;
+
+      return `
+        <div class="wallet-card">
+          <div class="wallet-head">
+            <span class="wallet-network">${w.label}</span>
+            <span class="hint">${w.address}</span>
+          </div>
+          <div class="wallet-balances column">
+            <span class="pill">${ethLine}</span>
+            <span class="pill">${uEthLine}</span>
+            <span class="pill">${uUsdcLine}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const walletPanel = `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Wallets</h2>
+        <span class="hint">Ethereum & Unichain</span>
+      </div>
+      <div class="wallet-grid">
+        ${walletCards || '<div class="empty">Wallet data unavailable.</div>'}
+      </div>
+    </div>
+  `;
+
   if (!snapshot) {
     return `
       <!DOCTYPE html>
@@ -75,10 +150,38 @@ export function generateHTML(snapshot, history = []) {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-          body { font-family: monospace; background: #1e1e1e; color: #e0e0e0; padding: 20px; }
-          .container { max-width: 800px; margin: 0 auto; }
-          h1 { color: #4ec9b0; }
+          body { 
+            font-family: 'Monaco', 'Courier New', monospace; 
+            background: #1e1e1e; 
+            color: #e0e0e0; 
+            padding: 20px; 
+            margin: 0;
+          }
+          .container { max-width: 900px; margin: 0 auto; }
+          h1 { color: #4ec9b0; margin-top: 0; }
           .info { color: #d4d4d4; font-size: 14px; }
+          .panel { background: #252526; border: 1px solid #3e3e42; border-radius: 4px; padding: 16px; margin: 24px 0; }
+          .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+          .hint { color: #858585; font-size: 11px; }
+          .validator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+          .validator-card { background: #1f1f23; border: 1px solid #3e3e42; border-radius: 6px; padding: 12px; }
+          .validator-id { color: #dcdcaa; font-weight: bold; margin-bottom: 6px; }
+          .validator-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+          .validator-status { text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; color: #d4d4d4; }
+          .validator-status.active { color: #4ec9b0; }
+          .validator-status.pending { color: #dcdcaa; }
+          .validator-status.exited, .validator-status.slash, .validator-status.error { color: #f14c4c; }
+          .validator-status.unknown { color: #858585; }
+          .validator-balance { color: #ce9178; font-weight: bold; }
+          .validator-error { color: #f14c4c; font-size: 12px; margin-top: 6px; }
+          .empty { color: #858585; text-align: center; padding: 8px 0; }
+          .wallet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+          .wallet-card { background: #1f1f23; border: 1px solid #3e3e42; border-radius: 6px; padding: 12px; }
+          .wallet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+          .wallet-network { color: #dcdcaa; font-weight: bold; font-size: 14px; }
+          .wallet-error { color: #f14c4c; font-size: 12px; }
+          .wallet-balances { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+          .pill { background: #2d2d30; border: 1px solid #3e3e42; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #ce9178; }
         </style>
       </head>
       <body>
@@ -86,6 +189,8 @@ export function generateHTML(snapshot, history = []) {
           <h1>📊 LP Watcher</h1>
           <p class="info">Waiting for first snapshot...</p>
           <p class="info">Page auto-refreshes every 30 seconds</p>
+          ${validatorPanel}
+          ${walletPanel}
         </div>
       </body>
       </html>
@@ -166,6 +271,25 @@ export function generateHTML(snapshot, history = []) {
         }
         .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
         .hint { color: #858585; font-size: 11px; }
+        .validator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .validator-card { background: #1f1f23; border: 1px solid #3e3e42; border-radius: 6px; padding: 12px; }
+        .validator-id { color: #dcdcaa; font-weight: bold; margin-bottom: 6px; }
+        .validator-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+        .validator-status { text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; color: #d4d4d4; }
+        .validator-status.active { color: #4ec9b0; }
+        .validator-status.pending { color: #dcdcaa; }
+        .validator-status.exited, .validator-status.slash, .validator-status.error { color: #f14c4c; }
+        .validator-status.unknown { color: #858585; }
+        .validator-balance { color: #ce9178; font-weight: bold; }
+        .validator-error { color: #f14c4c; font-size: 12px; margin-top: 6px; }
+        .empty { color: #858585; text-align: center; padding: 8px 0; }
+        .wallet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+        .wallet-card { background: #1f1f23; border: 1px solid #3e3e42; border-radius: 6px; padding: 12px; }
+        .wallet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .wallet-network { color: #dcdcaa; font-weight: bold; font-size: 14px; }
+        .wallet-error { color: #f14c4c; font-size: 12px; }
+        .wallet-balances { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+        .pill { background: #2d2d30; border: 1px solid #3e3e42; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #ce9178; }
         .chart-wrap { position: relative; min-height: 180px; }
         #chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #858585; font-size: 13px; }
       </style>
@@ -227,7 +351,7 @@ export function generateHTML(snapshot, history = []) {
 
         <div class="panel">
           <div class="panel-head">
-            <h2>Worth Over Time</h2>
+            <h2>LP Worth Over Time</h2>
             <span class="hint">History from position-history.csv</span>
           </div>
           <div class="chart-wrap">
@@ -236,6 +360,9 @@ export function generateHTML(snapshot, history = []) {
             <script type="application/json" id="history-data">${JSON.stringify(chartData)}</script>
           </div>
         </div>
+
+        ${validatorPanel}
+        ${walletPanel}
 
         <div class="footer">
           Last updated: ${lastUpdate}<br>
