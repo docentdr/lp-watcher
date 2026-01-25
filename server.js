@@ -121,6 +121,34 @@ async function getLatestSnapshot() {
   }
 }
 
+/**
+ * Read full CSV history
+ */
+async function getHistory() {
+  try {
+    const content = await fs.readFile(CSV_PATH, "utf8");
+    const lines = content.trim().split("\n");
+
+    if (lines.length < 2) {
+      return [];
+    }
+
+    const headers = lines[0].split(",");
+
+    return lines.slice(1).map((line) => {
+      const values = line.split(",");
+      const row = {};
+      headers.forEach((header, i) => {
+        row[header] = values[i];
+      });
+      return row;
+    });
+  } catch (err) {
+    console.error("Error reading CSV history:", err);
+    return [];
+  }
+}
+
 
 
 /**
@@ -132,7 +160,8 @@ const server = http.createServer(async (req, res) => {
     await takeSnapshot();
     
     const snapshot = await getLatestSnapshot();
-    const html = generateHTML(snapshot);
+    const history = await getHistory();
+    const html = generateHTML(snapshot, history);
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end(html);
   } else {

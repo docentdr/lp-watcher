@@ -65,7 +65,7 @@ function calculateSwapFromCSV(snapshot) {
 /**
  * Generate HTML response for the LP Watcher dashboard
  */
-export function generateHTML(snapshot) {
+export function generateHTML(snapshot, history = []) {
   if (!snapshot) {
     return `
       <!DOCTYPE html>
@@ -93,6 +93,13 @@ export function generateHTML(snapshot) {
   }
 
   const lastUpdate = new Date().toISOString();
+  const chartData = history
+    .map((row) => ({
+      date: row.date,
+      worth_eth: Number.parseFloat(row.worth_eth),
+      worth_usdc: Number.parseFloat(row.worth_usdc),
+    }))
+    .filter((row) => row.date && !Number.isNaN(row.worth_eth) && !Number.isNaN(row.worth_usdc));
 
   return `
     <!DOCTYPE html>
@@ -149,7 +156,20 @@ export function generateHTML(snapshot) {
         }
         td { color: #ce9178; }
         tr:hover { background: #2d2d30; }
+        h2 { color: #dcdcaa; margin: 0; font-size: 16px; }
+        .panel { 
+          background: #252526; 
+          border: 1px solid #3e3e42; 
+          border-radius: 4px; 
+          padding: 16px; 
+          margin: 24px 0;
+        }
+        .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+        .hint { color: #858585; font-size: 11px; }
+        .chart-wrap { position: relative; min-height: 180px; }
+        #chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #858585; font-size: 13px; }
       </style>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body>
       <div class="container">
@@ -205,11 +225,92 @@ export function generateHTML(snapshot) {
           </tr>
         </table>
 
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Worth Over Time</h2>
+            <span class="hint">History from position-history.csv</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="worthChart" height="200"></canvas>
+            <div id="chart-empty" style="display: none;">No history yet</div>
+            <script type="application/json" id="history-data">${JSON.stringify(chartData)}</script>
+          </div>
+        </div>
+
         <div class="footer">
           Last updated: ${lastUpdate}<br>
           Updates: on page visit or daily at midnight
         </div>
       </div>
+
+      <script>
+        (function initChart() {
+          const dataEl = document.getElementById('history-data');
+          const emptyEl = document.getElementById('chart-empty');
+          const ctx = document.getElementById('worthChart');
+
+          if (!dataEl || !ctx || !window.Chart) {
+            if (emptyEl) emptyEl.style.display = 'flex';
+            return;
+          }
+
+          const parsed = JSON.parse(dataEl.textContent || '[]');
+          if (!parsed.length) {
+            emptyEl.style.display = 'flex';
+            return;
+          }
+
+          const labels = parsed.map((row) => row.date);
+          const ethSeries = parsed.map((row) => row.worth_eth);
+          const usdcSeries = parsed.map((row) => row.worth_usdc);
+
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: 'Worth (ETH)',
+                  data: ethSeries,
+                  borderColor: '#4ec9b0',
+                  backgroundColor: 'rgba(78, 201, 176, 0.15)',
+                  tension: 0.25,
+                  borderWidth: 2,
+                },
+                {
+                  label: 'Worth (USDC)',
+                  data: usdcSeries,
+                  borderColor: '#dcdcaa',
+                  backgroundColor: 'rgba(220, 220, 170, 0.1)',
+                  tension: 0.25,
+                  borderWidth: 2,
+                  yAxisID: 'y1',
+                },
+              ],
+            },
+            options: {
+              plugins: {
+                legend: { labels: { color: '#e0e0e0' } },
+                tooltip: {
+                  mode: 'index',
+                  intersect: false,
+                },
+              },
+              scales: {
+                x: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
+                y: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
+                y1: {
+                  position: 'right',
+                  ticks: { color: '#dcdcaa' },
+                  grid: { drawOnChartArea: false },
+                },
+              },
+              interaction: { mode: 'index', intersect: false },
+              animation: false,
+            },
+          });
+        })();
+      </script>
     </body>
     </html>
   `;
