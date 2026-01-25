@@ -206,6 +206,38 @@ export function generateHTML(
     }))
     .filter((row) => row.date && !Number.isNaN(row.worth_eth) && !Number.isNaN(row.worth_usdc));
 
+  // Calculate total worth from all sources
+  const ethPrice = parseFloat(snapshot.eth_price);
+  
+  // LP position
+  const lpEth = parseFloat(snapshot.worth_eth);
+  const lpUsdc = parseFloat(snapshot.worth_usdc);
+  
+  // Validators
+  const validatorEth = (validators?.entries || [])
+    .filter(v => !v.error && v.balanceEth != null)
+    .reduce((sum, v) => sum + v.balanceEth, 0);
+  
+  // Wallets
+  const walletEth = (wallets?.wallets || [])
+    .reduce((sum, w) => {
+      const eth = !w.eth?.error ? (w.eth?.amount || 0) : 0;
+      const uEth = !w.uEth?.error ? (w.uEth?.amount || 0) : 0;
+      return sum + eth + uEth;
+    }, 0);
+  
+  const walletUsdc = (wallets?.wallets || [])
+    .reduce((sum, w) => {
+      const uUsdc = !w.uUsdc?.error ? (w.uUsdc?.amount || 0) : 0;
+      return sum + uUsdc;
+    }, 0);
+  
+  // Total combined
+  const totalEth = lpEth + validatorEth + walletEth;
+  const totalUsdc = lpUsdc + walletUsdc;
+  const totalUsdcFromEth = totalEth * ethPrice;
+  const totalUsdcCombined = totalUsdc + totalUsdcFromEth;
+
   return `
     <!DOCTYPE html>
     <html>
@@ -292,11 +324,44 @@ export function generateHTML(
         .pill { background: #2d2d30; border: 1px solid #3e3e42; border-radius: 999px; padding: 4px 10px; font-size: 12px; color: #ce9178; }
         .chart-wrap { position: relative; min-height: 180px; }
         #chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #858585; font-size: 13px; }
+        .accordion-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+        .accordion-toggle::before { content: '▶'; display: inline-block; transition: transform 0.2s; color: #4ec9b0; font-size: 12px; }
+        .accordion-toggle.expanded::before { transform: rotate(90deg); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .accordion-content.expanded { max-height: 600px; transition: max-height 0.5s ease-in; }
+        .total-worth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+        .total-worth-card { background: #1f1f23; border: 1px solid #3e3e42; border-radius: 6px; padding: 16px; text-align: center; }
+        .total-worth-label { color: #858585; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .total-worth-value { color: #4ec9b0; font-size: 24px; font-weight: bold; }
+        .total-worth-breakdown { color: #858585; font-size: 11px; margin-top: 8px; line-height: 1.4; }
       </style>
       <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <body>
       <div class="container">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Total Worth</h2>
+            <span class="hint">Combined LP + Wallets + Validators</span>
+          </div>
+          <div class="total-worth-grid">
+            <div class="total-worth-card">
+              <div class="total-worth-label">Total in ETH</div>
+              <div class="total-worth-value">${totalEth.toFixed(2)} ETH</div>
+              <div class="total-worth-breakdown">
+                LP: ${lpEth.toFixed(2)} · Validators: ${validatorEth.toFixed(2)} · Wallets: ${walletEth.toFixed(2)}
+              </div>
+            </div>
+            <div class="total-worth-card">
+              <div class="total-worth-label">Total in USDC</div>
+              <div class="total-worth-value">$${totalUsdcCombined.toLocaleString('en-US', {maximumFractionDigits: 2})}</div>
+              <div class="total-worth-breakdown">
+                LP: $${lpUsdc.toLocaleString('en-US', {maximumFractionDigits: 0})} · Wallets: $${walletUsdc.toLocaleString('en-US', {maximumFractionDigits: 0})} · ETH: $${totalUsdcFromEth.toLocaleString('en-US', {maximumFractionDigits: 0})}
+              </div>
+            </div>
+          </div>
+        </div>
+
         ${snapshot.recycle_suggested === 'TRUE' 
           ? `<div class="status ready">TIME TO RECYCLE</div>
              ${(() => {
@@ -306,63 +371,71 @@ export function generateHTML(
           : ''
         }
 
-        <table>
-          <tr>
-            <th>Field</th>
-            <th>Value</th>
-          </tr>
-          <tr>
-            <td>Date</td>
-            <td>${snapshot.date}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (ETH)</td>
-            <td>${parseFloat(snapshot.worth_eth).toFixed(1)}</td>
-          </tr>
-          <tr>
-            <td>Total Worth (USDC)</td>
-            <td>$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Position ETH</td>
-            <td>${parseFloat(snapshot.pos_eth).toFixed(4)}</td>
-          </tr>
-          <tr>
-            <td>Position USDC</td>
-            <td>${parseFloat(snapshot.pos_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Fee ETH</td>
-            <td>${parseFloat(snapshot.fee_eth).toFixed(4)}</td>
-          </tr>
-          <tr>
-            <td>Fee USDC</td>
-            <td>${parseFloat(snapshot.fee_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-          <tr>
-            <td>Recycle Ready</td>
-            <td>${snapshot.recycle_suggested}</td>
-          </tr>
-          <tr>
-            <td>ETH Price</td>
-            <td>$${parseFloat(snapshot.eth_price).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-          </tr>
-        </table>
-
         <div class="panel">
           <div class="panel-head">
-            <h2>LP Worth Over Time</h2>
-            <span class="hint">History from position-history.csv</span>
+            <h2>LP Position</h2>
+            <span class="hint">Current snapshot from Uniswap V3</span>
           </div>
-          <div class="chart-wrap">
-            <canvas id="worthChart" height="200"></canvas>
-            <div id="chart-empty" style="display: none;">No history yet</div>
-            <script type="application/json" id="history-data">${JSON.stringify(chartData)}</script>
-          </div>
+          <table>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+            <tr>
+              <td>Date</td>
+              <td>${snapshot.date}</td>
+            </tr>
+            <tr>
+              <td>Total ETH</td>
+              <td>${parseFloat(snapshot.worth_eth).toFixed(1)}</td>
+            </tr>
+            <tr>
+              <td>Total USDC</td>
+              <td>$${parseFloat(snapshot.worth_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+            </tr>
+            <tr>
+              <td>Position ETH</td>
+              <td>${parseFloat(snapshot.pos_eth).toFixed(4)}</td>
+            </tr>
+            <tr>
+              <td>Position USDC</td>
+              <td>${parseFloat(snapshot.pos_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+            </tr>
+            <tr>
+              <td>Fee ETH</td>
+              <td>${parseFloat(snapshot.fee_eth).toFixed(4)}</td>
+            </tr>
+            <tr>
+              <td>Fee USDC</td>
+              <td>${parseFloat(snapshot.fee_usdc).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+            </tr>
+            <tr>
+              <td>Recycle Ready</td>
+              <td>${snapshot.recycle_suggested}</td>
+            </tr>
+            <tr>
+              <td>ETH Price</td>
+              <td>$${parseFloat(snapshot.eth_price).toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+            </tr>
+          </table>
         </div>
 
         ${validatorPanel}
         ${walletPanel}
+
+        <div class="panel">
+          <div class="panel-head accordion-toggle" onclick="toggleAccordion()">
+            <h2>LP Worth Over Time</h2>
+            <span class="hint">History from position-history.csv</span>
+          </div>
+          <div class="accordion-content" id="chart-accordion">
+            <div class="chart-wrap">
+              <canvas id="worthChart" height="200"></canvas>
+              <div id="chart-empty" style="display: none;">No history yet</div>
+              <script type="application/json" id="history-data">${JSON.stringify(chartData)}</script>
+            </div>
+          </div>
+        </div>
 
         <div class="footer">
           Last updated: ${lastUpdate}<br>
@@ -371,71 +444,91 @@ export function generateHTML(
       </div>
 
       <script>
+        function toggleAccordion() {
+          const toggle = document.querySelector('.accordion-toggle');
+          const content = document.getElementById('chart-accordion');
+          
+          toggle.classList.toggle('expanded');
+          content.classList.toggle('expanded');
+          
+          // Initialize chart when expanded for the first time
+          if (content.classList.contains('expanded') && !window.chartInitialized) {
+            window.chartInitialized = true;
+            initChart();
+          }
+        }
+
         (function initChart() {
-          const dataEl = document.getElementById('history-data');
-          const emptyEl = document.getElementById('chart-empty');
-          const ctx = document.getElementById('worthChart');
+          // Don't auto-init - wait for user to expand accordion
+          if (!document.getElementById('chart-accordion')?.classList.contains('expanded')) {
+            window.initChart = function() {
+              const dataEl = document.getElementById('history-data');
+              const emptyEl = document.getElementById('chart-empty');
+              const ctx = document.getElementById('worthChart');
 
-          if (!dataEl || !ctx || !window.Chart) {
-            if (emptyEl) emptyEl.style.display = 'flex';
+              if (!dataEl || !ctx || !window.Chart) {
+                if (emptyEl) emptyEl.style.display = 'flex';
+                return;
+              }
+
+              const parsed = JSON.parse(dataEl.textContent || '[]');
+              if (!parsed.length) {
+                emptyEl.style.display = 'flex';
+                return;
+              }
+
+              const labels = parsed.map((row) => row.date);
+              const ethSeries = parsed.map((row) => row.worth_eth);
+              const usdcSeries = parsed.map((row) => row.worth_usdc);
+
+              new Chart(ctx, {
+                type: 'line',
+                data: {
+                  labels,
+                  datasets: [
+                    {
+                      label: 'Worth (ETH)',
+                      data: ethSeries,
+                      borderColor: '#4ec9b0',
+                      backgroundColor: 'rgba(78, 201, 176, 0.15)',
+                      tension: 0.25,
+                      borderWidth: 2,
+                    },
+                    {
+                      label: 'Worth (USDC)',
+                      data: usdcSeries,
+                      borderColor: '#dcdcaa',
+                      backgroundColor: 'rgba(220, 220, 170, 0.1)',
+                      tension: 0.25,
+                      borderWidth: 2,
+                      yAxisID: 'y1',
+                    },
+                  ],
+                },
+                options: {
+                  plugins: {
+                    legend: { labels: { color: '#e0e0e0' } },
+                    tooltip: {
+                      mode: 'index',
+                      intersect: false,
+                    },
+                  },
+                  scales: {
+                    x: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
+                    y: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
+                    y1: {
+                      position: 'right',
+                      ticks: { color: '#dcdcaa' },
+                      grid: { drawOnChartArea: false },
+                    },
+                  },
+                  interaction: { mode: 'index', intersect: false },
+                  animation: false,
+                },
+              });
+            };
             return;
           }
-
-          const parsed = JSON.parse(dataEl.textContent || '[]');
-          if (!parsed.length) {
-            emptyEl.style.display = 'flex';
-            return;
-          }
-
-          const labels = parsed.map((row) => row.date);
-          const ethSeries = parsed.map((row) => row.worth_eth);
-          const usdcSeries = parsed.map((row) => row.worth_usdc);
-
-          new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels,
-              datasets: [
-                {
-                  label: 'Worth (ETH)',
-                  data: ethSeries,
-                  borderColor: '#4ec9b0',
-                  backgroundColor: 'rgba(78, 201, 176, 0.15)',
-                  tension: 0.25,
-                  borderWidth: 2,
-                },
-                {
-                  label: 'Worth (USDC)',
-                  data: usdcSeries,
-                  borderColor: '#dcdcaa',
-                  backgroundColor: 'rgba(220, 220, 170, 0.1)',
-                  tension: 0.25,
-                  borderWidth: 2,
-                  yAxisID: 'y1',
-                },
-              ],
-            },
-            options: {
-              plugins: {
-                legend: { labels: { color: '#e0e0e0' } },
-                tooltip: {
-                  mode: 'index',
-                  intersect: false,
-                },
-              },
-              scales: {
-                x: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
-                y: { ticks: { color: '#d4d4d4' }, grid: { color: '#2f2f33' } },
-                y1: {
-                  position: 'right',
-                  ticks: { color: '#dcdcaa' },
-                  grid: { drawOnChartArea: false },
-                },
-              },
-              interaction: { mode: 'index', intersect: false },
-              animation: false,
-            },
-          });
         })();
       </script>
     </body>
